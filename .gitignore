@@ -1,0 +1,4 @@
+node_modules/
+.pycache/
+__pycache__/
+fixtures/

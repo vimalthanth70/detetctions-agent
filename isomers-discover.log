@@ -1,0 +1,108 @@
+No stable home-page selector found (home=1, product=0; avoid dynamic section ids).
+[
+  {
+    "selector": "main#MainContent > .shopify-section:first-of-type .media",
+    "ok": false,
+    "homeCount": 0,
+    "productCount": 0,
+    "method": "stable-candidate"
+  },
+  {
+    "selector": "main#MainContent > .shopify-section:first-of-type .banner",
+    "ok": false,
+    "homeCount": 0,
+    "productCount": 0,
+    "method": "stable-candidate"
+  },
+  {
+    "selector": "main#MainContent > .shopify-section:first-of-type .banner__media",
+    "ok": false,
+    "homeCount": 0,
+    "productCount": 0,
+    "method": "stable-candidate"
+  },
+  {
+    "selector": "main#MainContent > .shopify-section:first-of-type .slideshow",
+    "ok": false,
+    "homeCount": 0,
+    "productCount": 0,
+    "method": "stable-candidate"
+  },
+  {
+    "selector": "main#MainContent .shopify-section--slideshow",
+    "ok": false,
+    "homeCount": 0,
+    "productCount": 0,
+    "method": "stable-candidate"
+  },
+  {
+    "selector": "main#content .m6fr.slider-fraction",
+    "ok": false,
+    "homeCount": 0,
+    "productCount": 0,
+    "method": "stable-candidate"
+  },
+  {
+    "selector": "main#content > .shopify-section:first-child .m6fr",
+    "ok": false,
+    "homeCount": 0,
+    "productCount": 0,
+    "method": "stable-candidate"
+  },
+  {
+    "selector": "main#content .slider-fraction",
+    "ok": false,
+    "homeCount": 0,
+    "productCount": 0,
+    "method": "stable-candidate"
+  },
+  {
+    "selector": "main#content > .shopify-section:first-child .slider-fraction",
+    "ok": false,
+    "homeCount": 0,
+    "productCount": 0,
+    "method": "stable-candidate"
+  },
+  {
+    "selector": "main#content > .shopify-section:first-child [class*=\"slider\"]",
+    "ok": false,
+    "homeCount": 0,
+    "productCount": 0,
+    "method": "stable-candidate"
+  },
+  {
+    "selector": "main#content > .shopify-section:first-child [class*=\"slideshow\"]",
+    "ok": false,
+    "homeCount": 0,
+    "productCount": 0,
+    "method": "stable-candidate"
+  },
+  {
+    "selector": "main#content > .shopify-section:first-child [class*=\"hero\"]",
+    "ok": false,
+    "homeCount": 0,
+    "productCount": 0,
+    "method": "stable-candidate"
+  },
+  {
+    "selector": "main#content .shopify-section--slideshow",
+    "ok": false,
+    "homeCount": 0,
+    "productCount": 0,
+    "method": "stable-candidate"
+  },
+  {
+    "selector": "main .banner--desktop-transparent",
+    "ok": false,
+    "homeCount": 0,
+    "productCount": 0,
+    "method": "stable-candidate"
+  },
+  {
+    "selector": "main#content > .shopify-section:first-child",
+    "ok": false,
+    "homeCount": 0,
+    "productCount": 0,
+    "method": "stable-candidate"
+  }
+]
