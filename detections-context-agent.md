@@ -1,273 +1,99 @@
 # Detections context for agents
 
-Full context for the **detections-agent** project. Discovers Shopify storefront CSS selectors from the live store and writes **`detections-agent/output.js`** with eight keys. No UI, no HTML fixtures.
+Discover eight theme-native CSS selectors from a live Shopify storefront and write **`output.js`**.
 
-## TL;DR
-
-```bash
-cd detections-agent
-node scripts/discover.mjs <store.myshopify.com> [password]
-```
-
-Writes `output.js`:
+## Output
 
 ```javascript
-/** store-hostname.myshopify.com */
+/** store.myshopify.com */
 export default {
-  'product-form-selector':     '<css selector>',
-  'home-page-cvb':             '<css selector>',
-  'product-page-cvb':          '<css selector>',
-  'cart-drawer-cvb':           '<css selector or "">',
-  'cart-page-discount-code':   '<css selector or "">',
-  'cart-page-cvb':             '<css selector or "">',
-  'cart-icon':                 '<css selector>',
-  'cart-drawer-discount-code': '<css selector or "">',
+  'product-form-selector':     '<css>',
+  'home-page-cvb':             '<css>',
+  'product-page-cvb':          '<css>',
+  'cart-drawer-cvb':           '<css or "">',
+  'cart-page-discount-code':   '<css>',
+  'cart-page-cvb':             '<css>',
+  'cart-icon':                 '<css>',
+  'cart-drawer-discount-code': '<css or "">',
 };
 ```
 
-Use single quotes. Always emit all eight keys in this order. Use `''` when a key has no stable theme-native selector.
+Single quotes in `output.js`. All eight keys, this order.
+
+### Required keys
+
+| Key | Rule |
+|-----|------|
+| `product-form-selector`, `home-page-cvb`, `product-page-cvb`, `cart-page-discount-code`, `cart-page-cvb`, `cart-icon` | **Always non-empty** |
+| `cart-drawer-cvb`, `cart-drawer-discount-code` | **Non-empty when the theme has a cart drawer / mini-cart / quick-cart overlay**; otherwise `''` |
+
+Only the two drawer keys may be `''`, and only when there is no cart overlay markup.
 
 ---
 
 ## Hard rules
 
-1. **Theme-native only.** Reject app-injected selectors. Specifically: ids starting with `mr-div-embedded`, or `shopify-block-Aa…` containing `upsell_monk` / `monk_stage` / `monk_*`. If an element exists only because an app injected it, emit `''` instead.
-2. **No dynamic ids.** Reject anything matching `shopify-section-template--<digits>__…` (changes per deploy).
-3. **`cart-page-discount-code` and `cart-drawer-discount-code` are *totals-wrapper* selectors.** They mark the slot *above the total price* where a discount UI would render. Discovery must NOT search by `discount` / `coupon` / `footer` keywords — it must locate the element that **contains** a totals/subtotal block (`.totals`, `.totals__subtotal`, `[data-cart-total]`, or visible text `Subtotal` / `Estimated total` / `Order total`), scoped to the correct surface.
-4. **Single quotes** in `output.js`; use double quotes inside CSS attribute values.
+1. **Theme-native only.** Reject app-injected ids (`mr-div-embedded*`, `shopify-block-Aa*upsell_monk*`). Keep searching; do not emit `''` except allowed drawer keys.
+2. **No dynamic ids** in selectors (`shopify-section-template--<digits>__…`).
+3. **Keys 5 and 8 are totals-wrapper selectors** — the element that contains the subtotal/total block (or checkout + money amount), not a block found by `discount` / `coupon` keywords.
+4. **Single quotes** in output; double quotes inside CSS attribute values in JSON replies.
 
 ---
 
-## Output keys
+## Keys (verify with `querySelectorAll` counts)
 
-Every key follows the same shape: a CSS selector that's unique on its surface and theme-native. Counts below mean `document.querySelectorAll(selector).length`.
+### 1. `product-form-selector`
+PDP=1, home=0. `<form>` with `action` containing `/cart/add`. Disambiguate duplicate forms with `:not([id*="installment"])` etc.
 
-### 1. `product-form-selector` — main add-to-cart `<form>` on PDP
+### 2. `home-page-cvb`
+home=1, PDP=0. First full-width hero / slideshow / banner under the header.
 
-- **Verify:** PDP=1; matched node is `<form>`, `action` includes `/cart/add`, has add control (`button[name="add"]`, `input[name="add"]`, or `button[type="submit"]`).
-- **Avoid:** unscoped `form[data-type="add-to-cart-form"]` or `form[action*="/cart/add"]` — recommendation forms collide.
-- **Patterns:** see `lib/discover-selector.mjs` `CANDIDATES`. Common: `product-form form[data-type="add-to-cart-form"]`, `form[id^="product-form-template"][data-type="add-to-cart-form"]`, `form[action="/cart/add"]:not(.installment):not(.sticky-atc-bar__form)`.
+### 3. `product-page-cvb`
+home=0, PDP=1. Main product container wrapping gallery + title + variants + cart-add form (must contain `form[action*="cart/add"]`).
 
-### 2. `home-page-cvb` — first full-width content block under the navbar (home only)
+### 4. `cart-drawer-cvb`
+Inside drawer root only (`cart-drawer`, `#CartDrawer`, `.cart-drawer`, `[data-cart-drawer]`, `mini-cart`, `.quick-cart`, `[data-section-type="quick-cart"]`, Alpine `[x-show*="cart"]` / right-drawer modals, etc.). drawer=1; no matches outside drawer on home/PDP/cart main content. `''` only if no drawer.
 
-- **Verify:** home=1, PDP=0. Element is full-bleed: custom tag `full-width-slider`, or class `full-width` / `full_width` / `w-full` / `tw-w-full` / `.banner` / `.slideshow` / `.hero`. `.media` only inside hero/banner/slideshow. Section wrappers alone are rejected unless known full-bleed.
-- **Patterns:**
-  - Dawn / Horizon: `main#MainContent > .shopify-section:first-of-type .banner`
-  - Cactus: `main#MainContent > .shopify-section:first-of-type .media.w-full`
-  - Boxo / Xtra: `main#content .m6fr.slider-fraction`
-  - Isomers: `main#MainContent > .shopify-section:first-of-type full-width-slider`
+Line-items container only — not checkout footer. On mini-cart themes, `#mini-cart .drawer__content form` often matches **multiple** nested forms (recommendations); prefer the **direct-child** line-items form: `#mini-cart .drawer__content > form`, or a line-item table/list wrapper.
 
-### 3. `product-page-cvb` — main product container on PDP
+### 5. `cart-page-discount-code`
+cart=1, home=0, PDP=0. Totals wrapper on `/cart` — the block above subtotal/total with checkout. Often inside `form[action="/cart"]`, but on many modern themes checkout/totals sit **outside** the line-items form as a sibling in `main` (e.g. `main [class*='border-t-section']`, wrapper around `input[name='checkout']`). Must not match site footer or drawer overlay. Qualifies via totals class/text, or checkout control + money amount.
 
-- **Verify:** home=0, PDP=1. Wraps gallery + title + variants + form (not the form itself).
-- `data-update-url="true"` separates full PDP from home **featured product** blocks.
-- **Patterns:**
-  - Dawn: `product-info[data-update-url="true"]` or `main#MainContent product-info`
-  - Boxo / F8: `article#main-product`
-  - Isomers: `main#MainContent > section.shopify-section:first-of-type`
-  - Horizon: `.product-information`
+### 6. `cart-page-cvb`
+cart=1, home=0, PDP=0. Line-items container on `/cart`.
 
-### 4. `cart-drawer-cvb` — line-items container inside cart drawer / mini-cart / cart-popup
+On split-layout cart pages (e.g. Focal / Pureness), `form[action="/cart"]` is often the **`.cart__recap` checkout sidebar**, not line items. Prefer `.cart`, `.cart__content`, `.line-item-table`, or `cart-items`.
 
-- **Prep:** `POST /cart/add.js` with first variant id.
-- **Verify:** count=1 inside drawer root (`cart-drawer`, `#CartDrawer`, `.cart-drawer`, `mini-cart`, `cart-popup`, `section[x-show="cart_drawer"]`).
-- **No cart UI on the theme** → `''`.
-- **Patterns:**
-  - Cactus: `cart-drawer cart-items ul[role="list"]`
-  - Dawn: `cart-drawer #CartDrawer-CartItems`
-  - Isomers (mini-cart): `.mini-cart .product-cards-container`
+### 7. `cart-icon`
+home=1, PDP=1. Header cart control (`<a>`, `<button>`, or `<cart-icon>`). Links to `/cart` or opens drawer; never `/cart/add`; not inside drawer. If desktop+mobile duplicate links (count 2), use `:first-of-type` or row-specific scope.
 
-### 5. `cart-page-discount-code` — totals wrapper on `/cart` (above-total slot)
+### 8. `cart-drawer-discount-code`
+Same as key 5, scoped inside drawer. `''` only if no drawer.
 
-- **Prep:** add an item to cart, then `GET /cart` so totals render.
-- **Verify:** `/cart`=1, home=0, PDP=0. Element scoped to `form#cart` / `form[action="/cart"]` / `body.cart` / `body.template-cart`, **not** inside any cart drawer / mini-cart, and **contains** a totals block.
-- **No stable wrapper** → `''`.
-- **Patterns:**
-  - Dawn: `.cart__blocks` (parent of `.totals` inside `.cart__footer`) or scoped `form#cart .cart__blocks`
-  - Vintage: `form[action="/cart"] .cart__totals`
-  - Horizon: `.cart-page__totals` / `.cart-page__summary`
+Do **not** return the drawer `<footer>` root (e.g. `footer.mini-cart__drawer-footer`). Pick the **inner block inside the footer above the price/recap/checkout area** — e.g. `#mini-cart footer .mini-cart__actions`, `div.cart__recap-block` (drawer equivalent when present).
 
-### 6. `cart-page-cvb` — line-items container on `/cart`
+---
 
-- **Verify:** `/cart`=1, home=0, PDP=0. Matched node is `cart-items`, `#main-cart-items`, or `.js-contents` inside `form#cart` / `.cart__contents`. Id must not start with `mr-div-embedded`.
-- **No line-items container** → `''`.
-- **Patterns:**
-  - Dawn / Isomers: `cart-items #main-cart-items`
-  - Dawn alternate: `form#cart #main-cart-items`
+## Drawer detection
 
-### 7. `cart-icon` — header cart control
-
-- **Verify:** home=1 and PDP=1. Element is `<a>` / `<button>` / `<cart-icon>`. Opens drawer (`aria-controls="CartDrawer"` / `cart-drawer`) or links to `/cart` (never `/cart/add`). Not inside the drawer itself.
-- **Patterns:**
-  - Cactus: `a.cart-drawer-button[aria-controls="CartDrawer"]`
-  - Dawn: `a[href="/cart"].header__icon--cart`, `a#cart-icon`, `header a[href="/cart"]:has(svg)`
-- **Avoid:** `a[href="/cart"]:not([href*="/cart/add"])` when it matches multiple links (e.g. header + "View cart" in drawer).
-
-### 8. `cart-drawer-discount-code` — totals wrapper inside cart drawer / mini-cart (above-total slot)
-
-- Same rule as key 5, scoped inside the drawer.
-- **No drawer** or **no totals wrapper inside it** → `''`.
-- **Patterns:**
-  - Dawn / Cactus: `cart-drawer .cart-drawer__footer` (or `#CartDrawer .drawer__footer`)
-  - Alpine slide-in: `section[x-show="cart_drawer"] aside`
-  - Isomers (mini-cart): `mini-cart ul.ctas`
-
-> Names like `.cart-drawer__footer` are accepted because the theme happens to use that class for the totals wrapper. The discovery rule is "wrapper containing totals", not "find the word footer".
+Cart UI may be `<cart-drawer>`, `<mini-cart>`, `.quick-cart`, `[data-cart-drawer]`, Alpine right-drawer modals (`x-show` with `$store.modals.rightDrawer` / cart), `data-island[data-cart-items]` / `[data-cart-footer]`, or injected via `/?sections=<drawer-section>` after add-to-cart. Some themes park drawer markup inside `<template data-should-teleport="…">` — still counts as a drawer. Probe section keys (`cart`, `cart-items`, `cart-footer`, `quick-cart`, etc.) after `POST /cart/add.js`.
 
 ---
 
 ## Password-protected stores
 
-`GET /password` → extract `authenticity_token` → `POST /password` with `redirect: "manual"` → apply `Set-Cookie` from the 302 → follow `Location` → continue.
-
-**Critical:** Shopify's password POST returns **302** with the session cookie. If you let the client auto-follow (`redirect: "follow"`) before applying cookies, the home fetch still sees the gate. Always use `lib/store-session.mjs#loginStore` (which does this correctly) instead of hand-rolled flows.
-
-| Situation | Action |
-|-----------|--------|
-| Password gate, no password provided | Stop: *Store is password protected. Password is required.* |
-| Wrong password | Stop: *Password incorrect.* |
-| Store opens without gate | Omit password |
+Use `lib/store-session.mjs` with `redirect: "manual"`, apply cookies from the 302, then follow `Location`.
 
 ---
 
-## Example outputs
+## Agent
 
-### vimal-sanity.myshopify.com (Dawn, password `root`)
-
-```javascript
-export default {
-  'product-form-selector':     'product-form form[data-type="add-to-cart-form"]',
-  'home-page-cvb':             'main#MainContent > .shopify-section:first-of-type .banner',
-  'product-page-cvb':          'main#MainContent product-info',
-  'cart-drawer-cvb':           'cart-drawer #CartDrawer-CartItems',
-  'cart-page-discount-code':   '.cart__blocks',
-  'cart-page-cvb':             'cart-items #main-cart-items',
-  'cart-icon':                 'header a[href="/cart"]:has(svg)',
-  'cart-drawer-discount-code': 'cart-drawer .cart-drawer__footer',
-};
+```bash
+npm run serve   # POST /api/discover — discover agent + verifier agent pipeline
 ```
 
-### shop-cactus-nail.myshopify.com
+Pipeline: **Discover agent** proposes 8 selectors from compacted HTML → **Verifier agent** DOM-checks each key and retries failed keys (up to 5 attempts per key) until all pass or progress stops.
 
-```javascript
-export default {
-  'product-form-selector':     'form[id^="product-form-template"][data-type="add-to-cart-form"]',
-  'home-page-cvb':             'main#MainContent > .shopify-section:first-of-type .media.w-full',
-  'product-page-cvb':          'product-info[data-update-url="true"]',
-  'cart-drawer-cvb':           'cart-drawer cart-items ul[role="list"]',
-  'cart-page-discount-code':   '.cart__blocks',
-  'cart-page-cvb':             'cart-items #main-cart-items',
-  'cart-icon':                 'a.cart-drawer-button[aria-controls="CartDrawer"]',
-  'cart-drawer-discount-code': 'cart-drawer .cart-drawer__footer',
-};
-```
+Env: `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` (default `claude-opus-4-6`), `PORT`.
 
-### isomers-store.myshopify.com (mini-cart popup + cart-drawer section)
-
-```javascript
-export default {
-  'product-form-selector':     'form[action="/cart/add"]:not(.installment):not(.sticky-atc-bar__form)',
-  'home-page-cvb':             'main#MainContent > .shopify-section:first-of-type full-width-slider',
-  'product-page-cvb':          'main#MainContent > section.shopify-section:first-of-type',
-  'cart-drawer-cvb':           '.mini-cart .product-cards-container',
-  'cart-page-discount-code':   '',
-  'cart-page-cvb':             'cart-items #main-cart-items',
-  'cart-icon':                 'header a[href="/cart"]:has(svg)',
-  'cart-drawer-discount-code': 'mini-cart ul.ctas',
-};
-```
-
-### shapeshifter-fish-and-friends.myshopify.com (no cart drawer)
-
-```javascript
-export default {
-  'product-form-selector':     'product-form form[data-type="add-to-cart-form"]',
-  'home-page-cvb':             'main#MainContent > .shopify-section:first-of-type .banner',
-  'product-page-cvb':          'product-info[data-update-url="true"]',
-  'cart-drawer-cvb':           '',
-  'cart-page-discount-code':   '',
-  'cart-page-cvb':             '',
-  'cart-icon':                 'header a[href="/cart"]:has(svg)',
-  'cart-drawer-discount-code': '',
-};
-```
-
-### boxo-usa.myshopify.com (F8 theme)
-
-```javascript
-export default {
-  'product-form-selector':     'form.f8pr-buy-button[action="/cart/add"]',
-  'home-page-cvb':             'main#content .m6fr.slider-fraction',
-  'product-page-cvb':          'article#main-product',
-  'cart-drawer-cvb':           '',
-  'cart-page-discount-code':   '',
-  'cart-page-cvb':             '',
-  'cart-icon':                 'header a[href="/cart"]:has(svg)',
-  'cart-drawer-discount-code': '',
-};
-```
-
----
-
-## When automation fails
-
-1. Run the CLI and read the `tried` array in the error output for per-candidate counts.
-2. Fetch home + one PDP (+ `/cart` if relevant) with `fetch` / `curl`.
-3. Use `linkedom` or DevTools `querySelectorAll` on each surface to pick the most specific stable selector that satisfies the count rules above.
-4. Write `output.js` manually with the correct header comment. Never save HTML to `fixtures/` — the project does not use snapshots.
-
----
-
-## Project layout
-
-```
-detections-agent/
-├── detections-context-agent.md            ← this file
-├── output.js                              ← deliverable (generated)
-├── package.json                           ← npm run discover
-├── scripts/
-│   ├── discover.mjs                       ← CLI entry
-│   └── debug-login.mjs                    ← password-flow debug helper
-└── lib/
-    ├── discover-all.mjs                       ← runs all 8 discoveries
-    ├── discover-selector.mjs                  ← key 1
-    ├── discover-home-cvb.mjs                  ← key 2
-    ├── discover-product-page-cvb.mjs          ← key 3
-    ├── discover-cart-drawer-cvb.mjs           ← key 4
-    ├── discover-cart-page-discount-code.mjs   ← key 5
-    ├── discover-cart-page-cvb.mjs             ← key 6
-    ├── discover-cart-icon.mjs                 ← key 7
-    ├── discover-cart-drawer-discount-code.mjs ← key 8
-    ├── cart-drawer-html.mjs                   ← cart-drawer HTML loader
-    ├── store-session.mjs                      ← shared login (redirect: "manual")
-    └── format-output.mjs                      ← serialize output.js
-```
-
----
-
-## Pre-finish checklist
-
-- [ ] Store URL is `*.myshopify.com`; password used iff store is gated (via `loginStore`).
-- [ ] `output.js` has all 8 keys in the canonical order, single-quoted.
-- [ ] Counts: key 1 PDP=1; key 2 home=1, PDP=0; key 3 home=0, PDP=1; keys 5/6 cart=1, home=0, PDP=0; key 7 home=1, PDP=1.
-- [ ] Keys 5 and 8 are wrappers that **contain** a totals/subtotal block (no `discount` / `footer` keyword matching).
-- [ ] No dynamic `#shopify-section-template--…` ids.
-- [ ] No app-injected ids (`mr-div-embedded*`, `shopify-block-Aa*upsell_monk*`).
-
----
-
-## One-line prompt
-
-> Read `detections-agent/detections-context-agent.md`, then run `node scripts/discover.mjs <STORE_URL> [PASSWORD]` in `detections-agent/` and return the contents of `output.js`. If discovery fails, follow the manual rules in that doc and still produce a valid `output.js`.
-
----
-
-## Feedback log (append-only)
-
-Append one line per piece of user feedback that changed how detection works. Format: `date — store — lesson`.
-
-- 2026-05-27 — vimal-sanity — Always emit **8** keys (added `cart-drawer-discount-code`); the old `cart-page-discount-code` slot previously held the drawer wrapper, which was wrong.
-- 2026-05-27 — vimal-sanity — Reject **app-injected ids** (`mr-div-embedded*`, `shopify-block-Aa*upsell_monk*`). Emit `''` instead of falling back to them.
-- 2026-05-27 — vimal-sanity — Password login must use `redirect: "manual"` and apply `Set-Cookie` from the 302 before following. Use `lib/store-session.mjs#loginStore`.
-- 2026-05-27 — vimal-sanity — When the home HTML already contains the drawer, use home HTML alone for drawer probing; only concatenate section HTML when the drawer is injected post-add-to-cart.
-- 2026-05-27 — vimal-sanity — Keys 5 and 8 are *totals-wrapper* selectors. Find the element containing `.totals` / Subtotal text in the correct scope; do NOT search by `discount` / `coupon` / `footer` strings.
+Optional **`feedback`** in the request body — corrections or hints for a run. When present, the agent first updates this file with **generalizable** rules learned from the feedback, then re-runs discovery. Pass **`previousSelectors`** when re-running after a bad result so the agent knows what to fix.

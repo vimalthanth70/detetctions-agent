@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "discover": "node scripts/discover.mjs"
+    "serve": "node scripts/server.mjs"
   },
   "dependencies": {
     "linkedom": "^0.18.5"
