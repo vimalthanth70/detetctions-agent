@@ -319,10 +319,6 @@
             <label for="password">Store password <span style="text-transform: none; color: var(--muted)">(optional)</span></label>
             <input id="password" name="password" type="password" placeholder="(if store is password-protected)" />
           </div>
-          <div>
-            <label for="apiKey">Anthropic API key <span style="text-transform: none; color: var(--muted)">(required — or set ANTHROPIC_API_KEY)</span></label>
-            <input id="apiKey" name="apiKey" type="password" placeholder="sk-ant-..." autocomplete="off" required />
-          </div>
           <div class="full-width">
             <label for="feedback">Feedback for agent <span style="text-transform: none; color: var(--muted)">(optional)</span></label>
             <textarea
@@ -334,7 +330,8 @@
           <div class="row-actions">
             <button class="primary" id="submit" type="submit">Run agent</button>
             <span class="meta" id="meta-hint">
-              With feedback, the agent updates <code style="font-size:11px">detections-context-agent.md</code> with general rules, then discovers selectors. Re-run with feedback after a bad result to refine.
+              API key and model are configured on the server (<code style="font-size:11px">ANTHROPIC_API_KEY</code>, <code style="font-size:11px">ANTHROPIC_MODEL</code>).
+              <span id="model-hint"></span>
             </span>
           </div>
         </form>
@@ -387,8 +384,7 @@
         drawer: "Resolve cart drawer markup",
         learn: "Update rules from feedback",
         compact: "Compact scraped HTML for LLM",
-        discover: "Discover agent — initial selectors",
-        verifier: "Verifier agent — fix & re-check",
+        discover: "Discover agent — selectors from LLM",
         verify: "DOM verification",
       };
 
@@ -501,23 +497,13 @@
         e.preventDefault();
         const storeUrl = $("storeUrl").value.trim();
         const password = $("password").value;
-        const apiKey = $("apiKey").value.trim();
         const feedback = $("feedback").value.trim();
         if (!storeUrl) return;
-        if (!apiKey) {
-          $("error-text").textContent = "Anthropic API key is required.";
-          $("error-card").classList.remove("hidden");
-          return;
-        }
 
         if (storeUrl !== lastStoreUrl) {
           lastSelectors = null;
           lastStoreUrl = storeUrl;
         }
-
-        try {
-          if (apiKey) localStorage.setItem("anthropicApiKey", apiKey);
-        } catch (_) {}
 
         $("submit").disabled = true;
         $("submit").textContent = "Running...";
@@ -530,7 +516,7 @@
         $("log").innerHTML = "";
         if (!feedback) $("output").textContent = "";
 
-        const seedSteps = ["login", "product", "cart-add", "cart-page", "drawer", "learn", "compact", "discover", "verifier", "verify"];
+        const seedSteps = ["login", "product", "cart-add", "cart-page", "drawer", "learn", "compact", "discover", "verify"];
         for (const k of seedSteps) {
           ensureStep(k, STEP_LABELS[k]);
           if (k === "learn" && !feedback) {
@@ -539,7 +525,7 @@
         }
 
         try {
-          const body = { storeUrl, password, apiKey, feedback: feedback || undefined };
+          const body = { storeUrl, password, feedback: feedback || undefined };
           if (lastSelectors && lastStoreUrl === storeUrl) {
             body.previousSelectors = lastSelectors;
           }
@@ -565,7 +551,7 @@
             switch (event.type) {
               case "agent-start":
                 appendLog(
-                  `Pipeline starting for ${event.storeUrl}${event.willLearn ? " (will update rules doc)" : ""} — discover + verifier agents, model: ${event.model || "claude"}`,
+                  `Pipeline starting for ${event.storeUrl}${event.willLearn ? " (will update rules doc)" : ""} — model: ${event.model || "claude"}`,
                 );
                 break;
               case "context-updated":
@@ -647,10 +633,19 @@
         }
       });
 
-      try {
-        const saved = localStorage.getItem("anthropicApiKey");
-        if (saved) $("apiKey").value = saved;
-      } catch (_) {}
+      fetch("/api/config")
+        .then((r) => r.json())
+        .then((cfg) => {
+          const el = $("model-hint");
+          if (!el) return;
+          if (cfg.hasApiKey) {
+            el.textContent = ` Model: ${cfg.model || "claude-sonnet-4-6"}.`;
+          } else {
+            el.textContent = " WARNING: server has no ANTHROPIC_API_KEY — runs will fail.";
+            el.style.color = "var(--warn)";
+          }
+        })
+        .catch(() => {});
     </script>
   </body>
 </html>

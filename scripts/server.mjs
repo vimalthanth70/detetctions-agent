@@ -7,9 +7,13 @@
  * Routes
  *   GET  /              -> public/index.html
  *   GET  /public/*      -> static assets
+ *   GET  /api/config    -> { hasApiKey, model } (no secrets)
  *   POST /api/discover  -> NDJSON stream of progress events
+ *
+ * Env: ANTHROPIC_API_KEY (required), ANTHROPIC_MODEL, PORT
  */
 import { createServer } from "node:http";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
 import { extname, join, dirname, resolve } from "node:path";
@@ -17,8 +21,34 @@ import { fileURLToPath } from "node:url";
 import { runLlmAgent } from "../lib/agent-llm.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+function loadEnvFile(filePath) {
+  if (!existsSync(filePath)) return;
+  const text = readFileSync(filePath, "utf8");
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let val = trimmed.slice(eq + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    }
+    if (process.env[key] == null || process.env[key] === "") {
+      process.env[key] = val;
+    }
+  }
+}
+
+loadEnvFile(join(ROOT, ".env"));
 const PUBLIC_DIR = join(ROOT, "public");
 const PORT = Number(process.env.PORT || 3002);
+const ANTHROPIC_API_KEY = String(process.env.ANTHROPIC_API_KEY || "").trim();
+const ANTHROPIC_MODEL = String(process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6").trim();
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -101,8 +131,6 @@ async function handleDiscover(req, res) {
   }
   const storeUrl = String(body?.storeUrl || "").trim();
   const password = String(body?.password || "").trim();
-  const apiKey = String(body?.apiKey || "").trim();
-  const model = String(body?.model || "").trim();
   const feedback = String(body?.feedback || body?.agentMessage || body?.message || "").trim();
   const previousSelectors =
     body?.previousSelectors && typeof body.previousSelectors === "object"
@@ -116,14 +144,12 @@ async function handleDiscover(req, res) {
     });
   }
 
-  const effectiveKey = apiKey || process.env.ANTHROPIC_API_KEY || "";
-  if (!effectiveKey) {
+  if (!ANTHROPIC_API_KEY) {
     return send(
       res,
-      400,
+      503,
       JSON.stringify({
-        error:
-          "Anthropic API key required. Provide `apiKey` in the request body or set ANTHROPIC_API_KEY.",
+        error: "Server misconfigured: set ANTHROPIC_API_KEY in the environment.",
       }),
       { "Content-Type": "application/json" },
     );
@@ -150,13 +176,13 @@ async function handleDiscover(req, res) {
     hasFeedback: !!feedback,
     hasPreviousSelectors: !!previousSelectors,
     willLearn: !!feedback && learnFromFeedbackFlag,
-    model: model || process.env.ANTHROPIC_MODEL || "claude-opus-4-6",
+    model: ANTHROPIC_MODEL,
   });
 
   try {
     await runLlmAgent(storeUrl, password, emit, {
-      apiKey: effectiveKey,
-      model: model || undefined,
+      apiKey: ANTHROPIC_API_KEY,
+      model: ANTHROPIC_MODEL,
       feedback: feedback || undefined,
       previousSelectors,
       learnFromFeedback: learnFromFeedbackFlag,
@@ -188,6 +214,18 @@ const server = createServer(async (req, res) => {
     return handleDiscover(req, res);
   }
 
+  if (req.method === "GET" && path === "/api/config") {
+    return send(
+      res,
+      200,
+      JSON.stringify({
+        hasApiKey: !!ANTHROPIC_API_KEY,
+        model: ANTHROPIC_MODEL,
+      }),
+      { "Content-Type": "application/json" },
+    );
+  }
+
   if (req.method === "GET") {
     if (path.startsWith("/public/")) {
       return serveStatic(req, res, path.slice("/public".length));
@@ -200,4 +238,8 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`detections-agent server listening on http://localhost:${PORT}`);
+  console.log(`Model: ${ANTHROPIC_MODEL}`);
+  if (!ANTHROPIC_API_KEY) {
+    console.warn("WARNING: ANTHROPIC_API_KEY is not set — /api/discover will return 503");
+  }
 });

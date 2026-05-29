@@ -1,10 +1,11 @@
-/** farina-cologne.myshopify.com */
+/** 2b9754-f3.myshopify.com (Dawn theme → theenergydrink.com) */
 export default {
-  'product-form-selector': 'product-form > form.product-form',
-  'home-page-cvb': 'section.index-tab-collections',
-  'product-page-cvb': 'div.product__content',
-  'cart-drawer-cvb': 'cart-items.drawer__items',
-  'cart-page-discount-code': 'cart-drawer .drawer__foot',
-  'cart-page-cvb': '.cart__content',
-  'cart-icon': '.header__desktop__button a[href="/cart"]',
+  'product-form-selector': 'form[action="/cart/add"]:not([id*="installment"])',
+  'home-page-cvb': 'slideshow-component',
+  'product-page-cvb': '.product',
+  'cart-drawer-cvb': 'cart-drawer cart-drawer-items',
+  'cart-page-discount-code': '#main-cart-footer .totals',
+  'cart-page-cvb': 'cart-items',
+  'cart-icon': '.header__icon--cart',
+  'cart-drawer-discount-code': 'cart-drawer .drawer__footer .totals',
 };

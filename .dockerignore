@@ -1,0 +1,10 @@
+node_modules
+.git
+.gitignore
+output.js
+fixtures
+*.md
+!detections-context-agent.md
+.env
+.env.*
+.DS_Store
