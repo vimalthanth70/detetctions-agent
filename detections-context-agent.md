@@ -131,3 +131,14 @@ Pipeline: **Discover agent** proposes 8 selectors from compacted HTML → host *
 Env (required on server): `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` (default `claude-sonnet-4-6`), `PORT`.
 
 Optional **`feedback`** in the request body — corrections or hints for a run. When present, the agent first updates this file with **generalizable** rules learned from the feedback, then re-runs discovery. Pass **`previousSelectors`** when re-running after a bad result so the agent knows what to fix.
+
+**Explicit selectors in feedback** are parsed and DOM-verified directly (not only sent to the LLM). Use any of:
+
+- `cart-page-discount-code: '#main-cart-footer .totals'`
+- `cart-page-discount-code should be #main-cart-footer .totals`
+- `use #main-cart-footer .totals for cart-page-discount-code`
+- A ```json fence with key → selector pairs
+
+Or pass **`selectorOverrides`** in the request body: `{ "cart-page-discount-code": "#main-cart-footer .totals" }`.
+
+Failed keys trigger up to **2 correction passes** with the LLM; verified user hints are applied after each pass.

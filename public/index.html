@@ -324,7 +324,7 @@
             <textarea
               id="feedback"
               name="feedback"
-              placeholder="Correct wrong selectors or describe theme quirks — e.g. cart-page-cvb should be .cart not form[action='/cart']; drawer footer should be .mini-cart__actions not the footer root. Feedback updates detections-context-agent.md before re-running."
+              placeholder="Give exact selectors when you know them — e.g. cart-page-discount-code: '#main-cart-footer .totals' or cart-page-discount-code should be #main-cart-footer .totals. Parsed hints are DOM-verified and applied even if the LLM misses them. Re-run with feedback after a partial result; previousSelectors are sent automatically."
             ></textarea>
           </div>
           <div class="row-actions">
@@ -392,6 +392,57 @@
 
       let lastSelectors = null;
       let lastStoreUrl = "";
+
+      /** Mirror server parseFeedbackSelectors — selectors may contain spaces. */
+      function parseFeedbackOverrides(feedback) {
+        const text = String(feedback || "").trim();
+        if (!text) return {};
+        const out = {};
+        const trim = (v) => {
+          let s = String(v || "")
+            .trim()
+            .replace(/[.,;]+$/, "")
+            .trim();
+          if (
+            (s.startsWith("'") && s.endsWith("'")) ||
+            (s.startsWith('"') && s.endsWith('"')) ||
+            (s.startsWith("`") && s.endsWith("`"))
+          ) {
+            s = s.slice(1, -1).trim();
+          }
+          return s;
+        };
+        const fenced = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+        if (fenced) {
+          try {
+            const parsed = JSON.parse(fenced[1]);
+            for (const key of SELECTOR_KEYS) {
+              if (typeof parsed[key] === "string" && parsed[key].trim()) {
+                out[key] = trim(parsed[key]);
+              }
+            }
+          } catch (_) {}
+        }
+        for (const key of SELECTOR_KEYS) {
+          const esc = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const patterns = [
+            new RegExp(`(?:^|\\n)\\s*${esc}\\s*[:=]\\s*['"\`]([^'"\`]+)['"\`]`, "gi"),
+            new RegExp(`(?:^|\\n)\\s*${esc}\\s*[:=]\\s*(.+?)(?=\\s*(?:\\n|$))`, "gi"),
+            new RegExp(
+              `${esc}\\s+should\\s+be\\s+(?:['"\`]([^'"\`]+)['"\`]|(.+?)(?=\\s*(?:\\n|$|;)))`,
+              "gi",
+            ),
+            new RegExp(`use\\s+(?:['"\`]([^'"\`]+)['"\`]|(.+?))\\s+for\\s+${esc}`, "gi"),
+          ];
+          for (const re of patterns) {
+            for (const m of text.matchAll(re)) {
+              const val = trim(m[1] || m[2]);
+              if (val) out[key] = val;
+            }
+          }
+        }
+        return out;
+      }
 
       function ensureStep(id, label) {
         const list = $("steps");
@@ -529,6 +580,10 @@
           if (lastSelectors && lastStoreUrl === storeUrl) {
             body.previousSelectors = lastSelectors;
           }
+          const overrides = parseFeedbackOverrides(feedback);
+          if (Object.keys(overrides).length) {
+            body.selectorOverrides = overrides;
+          }
 
           const res = await fetch("/api/discover", {
             method: "POST",
@@ -577,7 +632,8 @@
                 break;
               case "selector":
                 if (event.value) {
-                  appendLog(`✓ ${event.key}: ${event.value}`, "info");
+                  const src = event.source ? ` (${event.source})` : "";
+                  appendLog(`✓ ${event.key}: ${event.value}${src}`, "info");
                 } else if (event.llmRaw) {
                   appendLog(
                     `✗ ${event.key}: dropped "${event.llmRaw}" — ${event.verify?.reason || "verify failed"}`,

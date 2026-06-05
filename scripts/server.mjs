@@ -13,7 +13,7 @@
  * Env: ANTHROPIC_API_KEY (required), ANTHROPIC_MODEL, PORT
  */
 import { createServer } from "node:http";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
 import { extname, join, dirname, resolve } from "node:path";
@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import { runLlmAgent } from "../lib/agent-llm.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const OUTPUT_JS_PATH = join(ROOT, "output.js");
 
 function loadEnvFile(filePath) {
   if (!existsSync(filePath)) return;
@@ -131,10 +132,15 @@ async function handleDiscover(req, res) {
   }
   const storeUrl = String(body?.storeUrl || "").trim();
   const password = String(body?.password || "").trim();
+  const productHandle = String(body?.productHandle || "").trim() || undefined;
   const feedback = String(body?.feedback || body?.agentMessage || body?.message || "").trim();
   const previousSelectors =
     body?.previousSelectors && typeof body.previousSelectors === "object"
       ? body.previousSelectors
+      : null;
+  const selectorOverrides =
+    body?.selectorOverrides && typeof body.selectorOverrides === "object"
+      ? body.selectorOverrides
       : null;
   const learnFromFeedbackFlag = body?.learnFromFeedback !== false;
 
@@ -175,17 +181,31 @@ async function handleDiscover(req, res) {
     hasPassword: !!password,
     hasFeedback: !!feedback,
     hasPreviousSelectors: !!previousSelectors,
+    hasSelectorOverrides: !!selectorOverrides,
     willLearn: !!feedback && learnFromFeedbackFlag,
     model: ANTHROPIC_MODEL,
   });
 
   try {
-    await runLlmAgent(storeUrl, password, emit, {
+    const emitWithWrite = (event) => {
+      emit(event);
+      if (event.type === "result" && event.outputJs) {
+        try {
+          writeFileSync(OUTPUT_JS_PATH, event.outputJs, "utf8");
+        } catch (e) {
+          // non-fatal — UI still gets the result
+        }
+      }
+    };
+
+    await runLlmAgent(storeUrl, password, emitWithWrite, {
       apiKey: ANTHROPIC_API_KEY,
       model: ANTHROPIC_MODEL,
       feedback: feedback || undefined,
       previousSelectors,
+      selectorOverrides,
       learnFromFeedback: learnFromFeedbackFlag,
+      productHandle,
     });
     emit({ type: "agent-done", engine: "llm" });
   } catch (e) {
