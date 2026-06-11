@@ -29,6 +29,12 @@ Single quotes in `output.js`. All eight keys, this order.
 
 Only the two drawer keys may be `''`, and only when there is no cart overlay markup.
 
+When a page is **Cloudflare-blocked** (CF challenge page returned instead of real content), the agent sets affected keys to `❌ CF blocked`:
+- PDP blocked → `product-form-selector`, `product-page-cvb`
+- Home blocked → `home-page-cvb`, `cart-icon`
+- Cart blocked → `cart-page-discount-code`, `cart-page-cvb`
+- Drawer keys (`cart-drawer-cvb`, `cart-drawer-discount-code`) always default to `''` when blocked (can't confirm drawer exists)
+
 ---
 
 ## Hard rules
@@ -48,6 +54,8 @@ PDP=1, home=0. `<form>` with `action` containing `/cart/add`. Disambiguate dupli
 ### 2. `home-page-cvb`
 home=1, PDP=0. First full-width hero / slideshow / banner under the header (e.g. `.banner`, `.fastslider-section`, `slide-show`).
 
+**Multiple slideshow sections on home**: When a theme repeats `.shopify-section--slideshow` (or `x-slideshow`) across several sections (home=3+), use `section.shopify-section--slideshow:first-of-type` to isolate the first one. This works because native Shopify sections render as `<section>` elements while app-injected sections often use `<div>` — so `:first-of-type` on `section` pinpoints the first true theme section regardless of how many follow.
+
 ### 3. `product-page-cvb`
 home=0, PDP=1. Main product container wrapping gallery + title + variants + cart-add form (must contain `form[action*="cart/add"]`). Often `.product`, `.product-information`, or `.product-details`.
 
@@ -55,6 +63,8 @@ home=0, PDP=1. Main product container wrapping gallery + title + variants + cart
 Inside drawer root only (`cart-drawer`, `#CartDrawer`, `.cart-drawer`, `[data-cart-drawer]`, `mini-cart`, `.quick-cart`, `[data-section-type="quick-cart"]`, Alpine `[x-show*="cart"]` / right-drawer modals, etc.). drawer=1; no matches outside drawer on home/PDP/cart main content. `''` only if no drawer.
 
 Line-items container only — not checkout footer. On mini-cart themes, `#mini-cart .drawer__content form` often matches **multiple** nested forms (recommendations); prefer the **direct-child** line-items form: `#mini-cart .drawer__content > form`, or a line-item table/list wrapper. Concept / custom-element themes: `<cart-items>` inside `<cart-drawer>` (`cart-drawer cart-items`); fetch `/?sections=cart-drawer` after add-to-cart for populated markup.
+
+**Impulse / Archetype themes**: The crawl fetches `/cart?view=ajax` → renders `#CartDrawerForm` with `[data-products]` — this is **not** what the browser DOM sees. The browser loads the drawer via `/?sections=cart-drawer` which renders a `<cart-drawer>` custom element. Always use `cart-drawer cart-items` (line items) and `cart-drawer .drawer__footer-body .totals` (totals) — never `#CartDrawerForm` selectors.
 
 ### 5. `cart-page-discount-code`
 cart=1, home=0, PDP=0. **Inner totals row inside the cart recap/summary container** — not the outer wrapper.
@@ -104,7 +114,8 @@ Do **not** return the drawer `<footer>` / `.fc-footer` / `.drawer__footer` / `.c
 | Bento | `#cart form.shopify-cart-form` |
 | Venue ajax cart | `.ajaxcart__footer .ajaxcart__footer-total` (inside `#CartTemplate` / `.ajaxcart-draw`) |
 | SlideCartHQ app | `.footer-row.amp-sc__footer-row--subtotal` (subtotal row with label + price inside `.slidecarthq`) |
-| Impulse / Archetype | `#CartDrawerForm .drawer__footer .cart__item-sub.cart__item-row:not(.cart__discounts)` (subtotal row with `[data-subtotal]`) |
+| popup-cart theme | `cart-drawer-cvb`: `.popup-cart .popup-cart__items` (AJAX-populated shell, empty in static HTML — accepted); `cart-drawer-discount-code`: `.popup-cart__footer .popup-cart__subtotal`; drawer root: `.popup-cart.js-popup-cart-ajax` |
+| Impulse / Archetype | `cart-drawer .drawer__footer-body .totals` (totals row inside `<cart-drawer>` sections-API structure — **not** `#CartDrawerForm` which is the `/cart?view=ajax` shell, not the browser DOM) |
 
 ---
 
