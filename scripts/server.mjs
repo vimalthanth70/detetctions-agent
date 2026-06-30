@@ -143,6 +143,7 @@ async function handleDiscover(req, res) {
       ? body.selectorOverrides
       : null;
   const learnFromFeedbackFlag = body?.learnFromFeedback !== false;
+  const allowCustomDomain = !!body?.allowCustomDomain;
 
   if (!storeUrl) {
     return send(res, 400, JSON.stringify({ error: "storeUrl is required" }), {
@@ -206,6 +207,7 @@ async function handleDiscover(req, res) {
       selectorOverrides,
       learnFromFeedback: learnFromFeedbackFlag,
       productHandle,
+      allowCustomDomain,
     });
     emit({ type: "agent-done", engine: "llm" });
   } catch (e) {
