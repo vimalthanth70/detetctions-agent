@@ -459,11 +459,17 @@ if (!resumeBatchId) {
 
   // ── Phase 2: Submit batch ───────────────────────────────────────────────────
 
+  // custom_id must match ^[a-zA-Z0-9_-]{1,64}$ — sanitize store URLs
+  const toCustomId = (url) => url.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
+  const customIdToUrl = new Map();
+
   const requests = [];
   for (const store of filtered) {
     const crawl = crawls.get(store.url);
     if (!crawl) continue;
-    requests.push(buildDiscoverRequest(store.url, crawl));
+    const customId = toCustomId(store.url);
+    customIdToUrl.set(customId, store.url);
+    requests.push(buildDiscoverRequest(customId, crawl));
   }
 
   if (requests.length === 0) {
@@ -499,7 +505,7 @@ if (!resumeBatchId) {
   );
 
   for (const row of rawResults) {
-    const storeUrl = row.custom_id;
+    const storeUrl = customIdToUrl.get(row.custom_id) ?? row.custom_id;
     const store = filtered.find((s) => s.url === storeUrl);
     if (!store) continue;
 
@@ -564,7 +570,7 @@ if (!resumeBatchId) {
         ].join("\n");
 
         return {
-          custom_id: `correction::${store.url}`,
+          custom_id: `corr_${toCustomId(store.url)}`.slice(0, 64),
           params: {
             model: MODEL,
             max_tokens: MAX_TOKENS,
@@ -587,7 +593,7 @@ if (!resumeBatchId) {
 
       console.log(`\n  Correction results:`);
       for (const row of corrResults) {
-        const storeUrl = row.custom_id.replace("correction::", "");
+        const storeUrl = customIdToUrl.get(row.custom_id.replace(/^corr_/, "")) ?? row.custom_id.replace(/^corr_/, "");
         const store = filtered.find((s) => s.url === storeUrl);
         if (!store) continue;
 
